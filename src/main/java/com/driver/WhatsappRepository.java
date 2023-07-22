@@ -4,46 +4,23 @@ import java.util.*;
 
 public class WhatsappRepository {
 
-    // to track the no of group
-    private  int userGropuCount;
-
-    // to track the no of messages
-    private  int messageId;
-
-    //  users mobile no --->  mobile-user
-    private HashMap<String , User> userHashMap;
-
-
-    // admin map
-   private  HashMap<Group,User> adminHasMap;
-
-
-
-    // group map  ---> group - userList
-
-    private HashMap<Group,List<User>> groupuserHashMap;
-
-
-
-    // group messsage
-
-    private HashMap<Group,List<Message>> groupmessageHashMap;
-
-
-    // sender map message-user
-
+    private HashMap<Group, List<User>> groupUserMap;
+    private HashMap<Group, List<Message>> groupMessageMap;
     private HashMap<Message, User> senderMap;
+    private HashMap<Group, User> adminMap;
+    private HashSet<String> userMobile;
+    private int customGroupCount;
+    private int messageId;
 
 
     public WhatsappRepository(){
-         this.userGropuCount =0;
-         this.messageId = 0;
-         this.userHashMap = new HashMap<>();
-         this.adminHasMap = new HashMap<>();
-         this.groupuserHashMap = new HashMap<>();
-         this.groupmessageHashMap = new HashMap<>();
-         this.senderMap  = new HashMap<>();
-
+        this.groupMessageMap = new HashMap<Group, List<Message>>();
+        this.groupUserMap = new HashMap<Group, List<User>>();
+        this.senderMap = new HashMap<Message, User>();
+        this.adminMap = new HashMap<Group, User>();
+        this.userMobile = new HashSet<>();
+        this.customGroupCount = 0;
+        this.messageId = 0;
 
     }
 
@@ -52,13 +29,19 @@ public class WhatsappRepository {
 
         //If the mobile number exists in database, throw "User already exists" exception
         //Otherwise, create the user and return "SUCCESS"
+        // otherwise , create new user and return success;
 
-        if(userHashMap.containsKey(mobile)){
-              throw new Exception("User already exists");
-          }
-        userHashMap.put(mobile,new User(name,mobile));
+
+        if (userMobile.contains(mobile)) {
+            throw new Exception("User already exists");
+        }
+
+        userMobile.add(mobile);
+
+        User user = new User(name, mobile);
 
         return "SUCCESS";
+
 
     }
 
@@ -73,36 +56,37 @@ public class WhatsappRepository {
         //For example: Consider userList1 = {Alex, Bob, Charlie}, userList2 = {Dan, Evan}, userList3 = {Felix, Graham, Hugh}.
         //If createGroup is called for these userLists in the same order, their group names would be "Group 1", "Evan", and "Group 2" respectively.
 
-         if(users.size()==2){
+        if (users.size() == 2) {
 
-               Group group = new Group(users.get(1).getName(),2);
+            Group group = new Group(users.get(1).getName(), 2);
 
+            adminMap.put(group, users.get(0));
+            groupUserMap.put(group, users);
+            groupMessageMap.put(group, new ArrayList<>());
+            return group;
+        }
 
-               adminHasMap.put(group, users.get(0));
-               groupuserHashMap.put(group,users);
-               groupmessageHashMap.put(group,new ArrayList<Message>());
-               return group;
-         }
+        this.customGroupCount += 1;
 
-         this.userGropuCount+=1;
+        Group group = new Group("Group" + this.customGroupCount, users.size());
 
-         Group group = new Group("Group "+this.userGropuCount,users.size());
-         adminHasMap.put(group,users.get(0));
-         groupuserHashMap.put(group,users);
-         groupmessageHashMap.put(group,new ArrayList<Message>());
-         return group;
+        adminMap.put(group, users.get(0));
+        groupUserMap.put(group, users);
+        groupMessageMap.put(group, new ArrayList<>());
+        return group;
     }
+
 
     public int createMessage(String content) {
 
         // The 'i^th' created message has message id 'i'.
         // Return the message id.
 
-        this.messageId+=1;
+        this.messageId += 1;
 
-        Message message = new Message(messageId,content);
+        Message message = new Message(this.messageId, content);
 
-        return  message.getId();
+        return message.getId();
 
 
     }
@@ -113,37 +97,31 @@ public class WhatsappRepository {
         //Throw "You are not allowed to send message" if the sender is not a member of the group
         //If the message is sent successfully, return the final number of messages in that group.
 
-         // first check the group
 
-        if(groupuserHashMap.containsKey(group)){
+        if (adminMap.containsKey(group)) {
 
-              boolean userFound= false;
-             List<User> users = groupuserHashMap.get(group);
-             for (User user:users){
+            List<User> usersList = groupUserMap.get(group);
+            boolean flag = false;
 
-                  if(sender.equals(user.getName())){
+            for (User user : usersList) {
 
-                       userFound = true;
-                       break;
-                  }
-             }
+                if (user.equals(sender)) {
+                    flag = true;
+                    break;
+                }
+            }
 
-             if (userFound){
+            if (flag) {
 
-                 senderMap.put(message,sender);
-                 List<Message>  messages =  groupmessageHashMap.get(group);
-
-                 messages.add(message);
-
-                 groupmessageHashMap.put(group,messages);
-
-                 return messages.size();
-             }
-
-                 throw new Exception("You are not allowed to send message");
-
+                senderMap.put(message, sender);
+                List<Message> messages = groupMessageMap.get(group);
+                messages.add(message);
+                groupMessageMap.put(group, messages);
+                return messages.size();
+            }
+            throw new Exception("You are not allowed to send message");
         }
-            throw new Exception("Group does not exist");
+        throw new Exception("Group does not exist");
 
     }
 
@@ -154,35 +132,34 @@ public class WhatsappRepository {
         //Throw "User is not a participant" if the user is not a part of the group
         //Change the admin of the group to "user" and return "SUCCESS". Note that at one time there is only one admin and the admin rights are transferred from approver to user.
 
-         if(groupuserHashMap.containsKey(group)){
-
-            if(adminHasMap.get(group).equals(approver)){
+        if (adminMap.containsKey(group)) {
 
 
-                  boolean isPresent = false;
+            if (adminMap.get(group).equals(approver)) {
 
-                  List<User> usersList = groupuserHashMap.get(group);
+                boolean isPresent = false;
 
-                  for(User user1: usersList){
+                List<User> userList = groupUserMap.get(group);
+                for (User user1 : userList) {
 
-                      if(user.equals(user1.getName())){
+                    if (user1.equals(user)) {
 
-                            isPresent = true;
-                            break;
-                      }
-                  }
-                  if(isPresent){
+                        isPresent = true;
+                        break;
+                    }
+                }
 
-                      adminHasMap.put(group,user);
-                      return "SUCCESS";
-                  }
-                  else {
-                      throw new Exception("User is not a participant");
-                  }
+                if (isPresent) {
+
+                    adminMap.put(group, user);
+                    return "SUCCESS";
+                }
+                throw new Exception("User is not a participant");
             }
-            else throw new Exception("Approver does not have rights");
-         }
-         else throw new Exception("Group does not exist");
+            throw new Exception("Approver does not have rights");
+        }
+
+        throw new Exception("Group does not exist");
     }
 
     public int removeUser(User user) throws Exception{
@@ -193,74 +170,89 @@ public class WhatsappRepository {
         //If user is not the admin, remove the user from the group, remove all its messages from all the databases, and update relevant attributes accordingly.
         //If user is removed successfully, return (the updated number of users in the group + the updated number of messages in group + the updated number of overall messages)
 
-        boolean userFound = false;
-        Group userGroup = null;
+        //This is a bonus problem and does not contains any marks
+        //A user belongs to exactly one group
+        //If user is not found in any group, throw "User not found" exception
+        //If user is found in a group and it is the admin, throw "Cannot remove admin" exception
+        //If user is not the admin, remove the user from the group, remove all its messages from all the databases, and update relevant attributes accordingly.
+        //If user is removed successfully, return (the updated number of users in the group + the updated number of messages in group + the updated number of overall messages)
 
-        for (Group group : groupuserHashMap.keySet()){
 
-            List<User> paricipants = groupuserHashMap.get(group);
+        boolean UserFound = false;
+        Group usergroup = null;
+        for (Group group : groupUserMap.keySet()) {
 
-              for(User participant : paricipants){
+            List<User> participants = groupUserMap.get(group);
+            for (User user1 : participants) {
 
-                  if(participant.equals(user)) {
-                      if (adminHasMap.get(group).equals(participant)) {
+                if (user1.equals(user)) {
+                    if (adminMap.get(group).equals(user)) {
+                        throw new Exception("Cannot remove admin");
+                    }
+                    usergroup = group;
+                    UserFound = true;
+                    break;
+                }
+            }
 
-                          throw new Exception("Cannot remove admin");
-                      }
-                      userGroup = group;
-                      userFound = true;
-                      break;
-                  }
-              }
-              if(userFound){
-                  break;
-              }
+            if (UserFound) {
+                break;
+            }
+
         }
 
+        if (UserFound) {
 
-        if(userFound){
-            List<User> users = groupuserHashMap.get(userGroup);
-             List<User> upadatedUsers = new ArrayList<>();
 
-             for(User participant: users){
+            userMobile.remove(user);
 
-                   if(participant.equals(user)){
-                       continue;
-                   }
-                   upadatedUsers.add(participant);
-             }
+            List<User> usersList = groupUserMap.get(usergroup);
 
-             groupuserHashMap.put(userGroup,upadatedUsers);
+            List<User> updateduser = new ArrayList<>();
 
-             List<Message> messages  = groupmessageHashMap.get(userGroup);
-             List<Message> updatedmessage = new ArrayList<>();
+            for (User user1 : usersList) {
 
-             for(Message message: messages){
+                if (user1.equals(user)) {
+                    continue;
+                }
+                updateduser.add(user1);
+            }
 
-                   if(senderMap.get(message).equals(user)){
+            groupUserMap.put(usergroup, updateduser);
 
-                         continue;
-                   }
-                   updatedmessage.add(message);
-             }
 
-             groupmessageHashMap.put(userGroup,updatedmessage);
+            List<Message> messagesList = groupMessageMap.get(usergroup);
+            List<Message> updatedMessages = new ArrayList<>();
 
-             HashMap<Message,User> updatedSenderMap = new HashMap<>();
+            for (Message message : messagesList) {
 
-             for (Message message: senderMap.keySet()){
+                if (senderMap.get(message).equals(user)) {
 
-                  if(senderMap.get(message).equals(user)){
-                      continue;
-                  }
+                    continue;
+                }
+                updatedMessages.add(message);
+            }
 
-                  updatedSenderMap.put(message,senderMap.get(message));
-             }
-             senderMap = updatedSenderMap;
+            groupMessageMap.put(usergroup, updatedMessages);
 
-             return upadatedUsers.size()+updatedmessage.size()+updatedSenderMap.size();
+
+            HashMap<Message, User> updatesenderMap = new HashMap<>();
+
+            for (Message message : senderMap.keySet()) {
+
+                if (senderMap.get(message).equals(user)) {
+                    continue;
+                }
+
+                updatesenderMap.put(message, user);
+            }
+            senderMap = updatesenderMap;
+            return updateduser.size() + updatesenderMap.size() + updatesenderMap.size();
         }
-       else throw new Exception("User not found");
+
+        throw new Exception("User not found");
+
+
     }
 
     public String findMessage(Date start, Date end, int k) throws Exception{
@@ -272,9 +264,9 @@ public class WhatsappRepository {
 
         List<Message> messages = new ArrayList<>();
 
-        for (Group group : groupmessageHashMap.keySet()) {
+        for (Group group : groupMessageMap.keySet()) {
 
-            messages.addAll(groupmessageHashMap.get(group));
+            messages.addAll(groupMessageMap.get(group));
         }
 
         List<Message> filteredMessages = new ArrayList<>();
