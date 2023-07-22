@@ -139,13 +139,12 @@ public class WhatsappRepository {
 
                  return messages.size();
              }
-             else{
+
                  throw new Exception("You are not allowed to send message");
-             }
+
         }
-        else{
             throw new Exception("Group does not exist");
-        }
+
     }
 
     public String changeAdmin(User approver, User user, Group group) throws Exception{
